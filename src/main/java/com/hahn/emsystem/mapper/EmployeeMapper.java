@@ -25,4 +25,8 @@ public interface EmployeeMapper {
 
     @Mapping(target = "id", ignore = true)
     void updateEntityFromRequest(ManagerUpdateEmployeeRequest request, @MappingTarget Employee employee);
+
+
+    @Mapping(target = "id", ignore = true)
+    void updateEntityFromRequest(EmployeeRequest request, @MappingTarget Employee employee);
 }

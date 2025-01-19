@@ -63,13 +63,11 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     public EmployeeResponse updateEmployee(Long id, EmployeeRequest request) {
-        if (!employeeRepository.existsById(id)){
-            throw   new IllegalArgumentException("Employee with id " + id + " does not exist");
-        }
-        Employee updatedEmployee = employeeMapper.toEntity(request);
-        updatedEmployee.setId(id);
-        Employee savedEmployee = employeeRepository.save(updatedEmployee);
-        return employeeMapper.toResponse(savedEmployee);
+        Employee existingEmployee = employeeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Employee with id " + id + " does not exist"));
+        employeeMapper.updateEntityFromRequest(request, existingEmployee);
+        Employee updatedEmployee = employeeRepository.save(existingEmployee);
+        return employeeMapper.toResponse(updatedEmployee);
     }
 
 
