@@ -68,7 +68,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (!employeeRepository.existsById(id)) {
             throw new IllegalArgumentException("Employee with id " + id + " does not exist");
         }
-        logAudit(AuditAction.DELETED, serializeEmployee(employeeRepository.getOne(id)), "");
+        logAudit(AuditAction.DELETED, serializeEmployee(employeeRepository.findById(id).get()), "");
         employeeRepository.deleteById(id);
     }
 
@@ -155,9 +155,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         return employeeMapper.toResponseList(employees);
     }
-
-
-
 
     private void logAudit(AuditAction action, String oldValue, String newValue) {
         String performedBy = UserUtils.getAuthenticatedUserUsername();

@@ -21,7 +21,9 @@ public class Audit {
     @Enumerated(EnumType.STRING)
     private AuditAction action;
     private String performedBy;
+    @Column(length = 1000)
     private String oldValue;
+    @Column(length = 1000)
     private String newValue;
     private LocalDateTime performedAt;
 }
