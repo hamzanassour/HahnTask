@@ -1,20 +1,26 @@
 package com.hahn.emsystem.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hahn.emsystem.dto.request.EmployeeRequest;
 import com.hahn.emsystem.dto.request.ManagerUpdateEmployeeRequest;
 import com.hahn.emsystem.dto.response.EmployeeResponse;
+import com.hahn.emsystem.entity.Audit;
+import com.hahn.emsystem.entity.AuditAction;
 import com.hahn.emsystem.entity.Employee;
 import com.hahn.emsystem.mapper.EmployeeMapper;
+import com.hahn.emsystem.repository.AuditRepository;
 import com.hahn.emsystem.repository.EmployeeRepository;
 import com.hahn.emsystem.service.EmployeeService;
 import com.hahn.emsystem.utils.UserUtils;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,17 +31,21 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final EmployeeMapper employeeMapper;
 
+    private AuditRepository auditRepository;
+
 
     @Autowired
-    public EmployeeServiceImpl(EmployeeRepository employeeRepository, EmployeeMapper employeeMapper) {
+    public EmployeeServiceImpl(EmployeeRepository employeeRepository, EmployeeMapper employeeMapper, AuditRepository auditRepository) {
         this.employeeRepository = employeeRepository;
         this.employeeMapper = employeeMapper;
+        this.auditRepository = auditRepository;
     }
 
     @Override
     public EmployeeResponse createEmployee(EmployeeRequest request) {
         Employee employee = employeeMapper.toEntity(request);
         Employee savedEmployee = employeeRepository.save(employee);
+        logAudit(AuditAction.CREATED, "", serializeEmployee(savedEmployee));
         return employeeMapper.toResponse(savedEmployee);
     }
 
@@ -58,6 +68,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (!employeeRepository.existsById(id)) {
             throw new IllegalArgumentException("Employee with id " + id + " does not exist");
         }
+        logAudit(AuditAction.DELETED, serializeEmployee(employeeRepository.getOne(id)), "");
         employeeRepository.deleteById(id);
     }
 
@@ -65,7 +76,10 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeResponse updateEmployee(Long id, EmployeeRequest request) {
         Employee existingEmployee = employeeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Employee with id " + id + " does not exist"));
+        Employee oldEmployee = new Employee();
+        BeanUtils.copyProperties(existingEmployee, oldEmployee);
         employeeMapper.updateEntityFromRequest(request, existingEmployee);
+        logAudit(AuditAction.UPDATED, serializeEmployee(oldEmployee), serializeEmployee(existingEmployee));
         Employee updatedEmployee = employeeRepository.save(existingEmployee);
         return employeeMapper.toResponse(updatedEmployee);
     }
@@ -76,6 +90,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Employee with id " + id + " does not exist"));
 
+        Employee oldEmployee = new Employee();
+        BeanUtils.copyProperties(employee, oldEmployee);
         if (UserUtils.hasRole("ROLE_MANAGER")) {
             Employee manager = employeeRepository.findByUsername(UserUtils.getAuthenticatedUserUsername())
                     .orElseThrow(() -> new IllegalArgumentException("Manager not found"));
@@ -85,6 +101,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         employeeMapper.updateEntityFromRequest(request, employee);
+        logAudit(AuditAction.UPDATED, serializeEmployee(oldEmployee), serializeEmployee(employee));
         Employee savedEmployee = employeeRepository.save(employee);
         return employeeMapper.toResponse(savedEmployee);
     }
@@ -137,5 +154,24 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         return employeeMapper.toResponseList(employees);
+    }
+
+
+
+
+    private void logAudit(AuditAction action, String oldValue, String newValue) {
+        String performedBy = UserUtils.getAuthenticatedUserUsername();
+        Audit audit = new Audit(null, action, performedBy, oldValue, newValue, LocalDateTime.now());
+        auditRepository.save(audit);
+    }
+
+    private String serializeEmployee(Employee employee) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            return objectMapper.writeValueAsString(employee);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "";
+        }
     }
 }
